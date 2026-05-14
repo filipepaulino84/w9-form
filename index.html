@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Preenchimento automático W-9</title>
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; max-width: 760px; margin: 24px auto; padding: 16px; color: #222; }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p.lead { color: #555; margin: 0 0 20px; font-size: 14px; }
+  fieldset { border: 1px solid #d0d7de; padding: 12px 16px 16px; margin: 0 0 16px; border-radius: 6px; background: #fafbfc; }
+  legend { font-weight: 600; padding: 0 6px; font-size: 14px; color: #24292f; }
+  label { display: block; margin: 10px 0 4px; font-size: 13px; color: #333; }
+  input[type="text"], select { width: 100%; padding: 7px 9px; box-sizing: border-box; font-size: 14px; border: 1px solid #d0d7de; border-radius: 4px; background: #fff; }
+  input[type="text"]:focus, select:focus { outline: none; border-color: #0969da; box-shadow: 0 0 0 3px rgba(9,105,218,0.15); }
+  .row { display: flex; gap: 12px; }
+  .row > * { flex: 1; }
+  .btn { padding: 10px 18px; font-size: 15px; cursor: pointer; border: 0; border-radius: 5px; font-weight: 500; }
+  .btn-primary { background: #1f6feb; color: #fff; }
+  .btn-primary:hover { background: #1a5cd1; }
+  .btn-secondary { background: #6e7781; color: #fff; }
+  .btn-secondary:hover { background: #57606a; }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  #log { white-space: pre-wrap; background: #0d1117; color: #c9d1d9; padding: 10px 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; border-radius: 5px; margin-top: 14px; max-height: 240px; overflow: auto; }
+  small.hint { color: #6e7781; font-size: 12px; }
+  .check-line { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .check-line input[type="checkbox"] { width: auto; }
+</style>
+</head>
+<body>
+
+<h1>Preenchimento automático do formulário W-9</h1>
+<p class="lead">
+  Preencha os campos abaixo e clique em <strong>Executar</strong>. A página baixa o PDF oficial
+  (<code>fw9.pdf</code> do IRS), preenche os campos do formulário e oferece o resultado para download.
+  Tudo acontece localmente no navegador — nenhum dado é enviado a servidores.
+</p>
+
+<fieldset>
+  <legend>Identificação</legend>
+  <label>Linha 1 — Nome (como aparece na declaração de imposto)
+    <input id="name" type="text" autocomplete="off"/>
+  </label>
+  <label>Linha 2 — Nome comercial / <em>disregarded entity</em> (se diferente da Linha 1)
+    <input id="business" type="text" autocomplete="off"/>
+  </label>
+</fieldset>
+
+<fieldset>
+  <legend>Linha 3a — Classificação tributária federal</legend>
+  <label>Tipo
+    <select id="classification">
+      <option value="individual">Individual / sole proprietor / single-member LLC</option>
+      <option value="ccorp">C Corporation</option>
+      <option value="scorp">S Corporation</option>
+      <option value="partnership">Partnership</option>
+      <option value="trust">Trust / estate</option>
+      <option value="llc">LLC (tributada como C, S ou P)</option>
+      <option value="other">Outro</option>
+    </select>
+  </label>
+  <div class="row">
+    <label>Se LLC — letra do regime (C, S ou P)
+      <input id="llcType" type="text" maxlength="1"/>
+    </label>
+    <label>Se "Outro" — descreva
+      <input id="otherType" type="text"/>
+    </label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Linha 4 — Isenções (opcional, ver instruções do W-9)</legend>
+  <div class="row">
+    <label>Exempt payee code
+      <input id="exemptCode" type="text"/>
+    </label>
+    <label>Exemption from FATCA reporting code
+      <input id="fatcaCode" type="text"/>
+    </label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Endereço</legend>
+  <label>Linha 5 — Endereço (número, rua, apto/suite)
+    <input id="address" type="text" autocomplete="off"/>
+  </label>
+  <label>Linha 6 — Cidade, estado e ZIP code
+    <input id="cityStateZip" type="text" autocomplete="off"/>
+  </label>
+  <label>Nome e endereço do solicitante (opcional)
+    <input id="requester" type="text" autocomplete="off"/>
+  </label>
+  <label>Linha 7 — Números de conta (opcional)
+    <input id="accounts" type="text" autocomplete="off"/>
+  </label>
+</fieldset>
+
+<fieldset>
+  <legend>Parte I — Número de identificação fiscal (TIN)</legend>
+  <small class="hint">Preencha apenas um: SSN <em>ou</em> EIN.</small>
+  <div class="row">
+    <label>SSN
+      <input id="ssn" type="text" placeholder="000-00-0000"/>
+    </label>
+    <label>EIN
+      <input id="ein" type="text" placeholder="00-0000000"/>
+    </label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Parte II — Âncoras DocuSign (campo "Sign Here")</legend>
+  <small class="hint">
+    Insere texto invisível (branco) no local da assinatura para que o DocuSign posicione
+    os tabs automaticamente via <em>anchor tagging</em>.
+  </small>
+  <label class="check-line" style="margin-top:10px">
+    <input id="enableAnchors" type="checkbox" checked/>
+    Inserir âncoras de assinatura
+  </label>
+  <div class="row">
+    <label>Âncora da assinatura
+      <input id="sigAnchor" type="text" value="/s1/"/>
+    </label>
+    <label>Âncora da data
+      <input id="dateAnchor" type="text" value="/d1/"/>
+    </label>
+  </div>
+  <div class="row">
+    <label>Assinatura — X
+      <input id="sigX" type="text" value="200"/>
+    </label>
+    <label>Assinatura — Y
+      <input id="sigY" type="text" value="108"/>
+    </label>
+    <label>Data — X
+      <input id="dateX" type="text" value="475"/>
+    </label>
+    <label>Data — Y
+      <input id="dateY" type="text" value="108"/>
+    </label>
+  </div>
+  <label class="check-line" style="margin-top:8px">
+    <input id="anchorVisible" type="checkbox"/>
+    Modo debug — âncoras visíveis (cinza claro) para conferir posição
+  </label>
+</fieldset>
+
+<fieldset>
+  <legend>Saída</legend>
+  <label class="check-line">
+    <input id="flatten" type="checkbox" checked/>
+    Fixar campos (flatten) — gera PDF não editável, pronto para envio ao DocuSign
+  </label>
+</fieldset>
+
+<div class="actions">
+  <button id="run" class="btn btn-primary" type="button">Executar</button>
+  <label class="btn btn-secondary" style="cursor:pointer; display:inline-flex; align-items:center;">
+    Carregar W-9 do disco
+    <input id="filePicker" type="file" accept="application/pdf,.pdf" style="position:absolute; left:-9999px; opacity:0;"/>
+  </label>
+  <small class="hint">Use a opção do disco caso o download direto do IRS seja bloqueado por CORS.</small>
+</div>
+
+<div id="log"></div>
+
+<script>
+(function loadPdfLib() {
+  const s = document.createElement('script');
+  s.src = 'pdf-lib.min.js';
+  s.onerror = () => { window.__pdflibLoadError = true; };
+  document.head.appendChild(s);
+})();
+</script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const logEl = $('log');
+  const log = (...args) => { logEl.textContent += args.join(' ') + '\n'; logEl.scrollTop = logEl.scrollHeight; };
+
+  let localPdfBytes = null;
+
+  $('filePicker').addEventListener('change', async (e) => {
+    log('Evento change disparado pelo seletor de arquivos.');
+    const f = e.target.files && e.target.files[0];
+    if (!f) { log('Nenhum arquivo selecionado.'); return; }
+    try {
+      const buf = await f.arrayBuffer();
+      localPdfBytes = new Uint8Array(buf);
+      log('PDF local carregado:', f.name, '(' + localPdfBytes.length + ' bytes). Toque em "Executar" para gerar.');
+    } catch (err) {
+      log('Falha lendo arquivo:', err.message);
+    }
+  });
+
+  async function fetchW9() {
+    if (localPdfBytes) { log('Usando PDF carregado do disco.'); return localPdfBytes; }
+    const url = '<https://www.irs.gov/pub/irs-pdf/fw9.pdf>';
+    const candidates = [
+      url,
+      '<https://corsproxy.io/?'> + encodeURIComponent(url),
+      '<https://api.allorigins.win/raw?url=>' + encodeURIComponent(url),
+    ];
+    for (const u of candidates) {
+      try {
+        log('Baixando:', u);
+        const r = await fetch(u);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const buf = await r.arrayBuffer();
+        log('OK —', buf.byteLength, 'bytes');
+        return new Uint8Array(buf);
+      } catch (err) {
+        log('  falhou:', err.message);
+      }
+    }
+    throw new Error('Não foi possível baixar o W-9. Use "Carregar W-9 do disco".');
+  }
+
+  function findField(form, suffix) {
+    return form.getFields().find(f => f.getName().endsWith(suffix));
+  }
+
+  function setText(form, suffix, value) {
+    if (value == null || value === '') return false;
+    const f = findField(form, suffix);
+    if (!f) return false;
+    try { f.setText(String(value)); return true; } catch (e) { log('  setText falhou em', suffix, '-', e.message); return false; }
+  }
+
+  function setCheck(form, suffix) {
+    const f = findField(form, suffix);
+    if (!f || typeof f.check !== 'function') return false;
+    try { f.check(); return true; } catch (e) { log('  check falhou em', suffix, '-', e.message); return false; }
+  }
+
+  function collectData() {
+    return {
+      name: $('name').value.trim(),
+      business: $('business').value.trim(),
+      classification: $('classification').value,
+      llcType: $('llcType').value.trim().toUpperCase(),
+      otherType: $('otherType').value.trim(),
+      exemptCode: $('exemptCode').value.trim(),
+      fatcaCode: $('fatcaCode').value.trim(),
+      address: $('address').value.trim(),
+      cityStateZip: $('cityStateZip').value.trim(),
+      requester: $('requester').value.trim(),
+      accounts: $('accounts').value.trim(),
+      ssn: $('ssn').value.replace(/\D/g, ''),
+      ein: $('ein').value.replace(/\D/g, ''),
+    };
+  }
+
+  async function waitForPdfLib(timeoutMs = 8000) {
+    const start = Date.now();
+    while (typeof window.PDFLib === 'undefined') {
+      if (window.__pdflibLoadError) throw new Error('Falha ao carregar pdf-lib.min.js (mesmo diretório do index.html). Verifique se o arquivo está commitado no repo.');
+      if (Date.now() - start > timeoutMs) throw new Error('Timeout aguardando pdf-lib. Recarregue a página.');
+      await new Promise(r => setTimeout(r, 100));
+    }
+  }
+
+  $('run').onclick = async () => {
+    const btn = $('run');
+    btn.disabled = true;
+    logEl.textContent = '';
+    try {
+      await waitForPdfLib();
+      const data = collectData();
+      if (!data.name) { log('AVISO: Linha 1 (nome) está vazia — o IRS exige esse campo.'); }
+      if (data.ssn && data.ssn.length !== 9) throw new Error('SSN deve ter 9 dígitos.');
+      if (data.ein && data.ein.length !== 9) throw new Error('EIN deve ter 9 dígitos.');
+
+      const bytes = await fetchW9();
+      const { PDFDocument } = PDFLib;
+      const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+      const form = pdf.getForm();
+      const fields = form.getFields();
+      log('Campos detectados:', fields.length);
+
+      setText(form, 'f1_1[0]',  data.name);
+      setText(form, 'f1_2[0]',  data.business);
+      setText(form, 'f1_3[0]',  data.llcType);
+      setText(form, 'f1_4[0]',  data.otherType);
+      setText(form, 'f1_5[0]',  data.exemptCode);
+      setText(form, 'f1_6[0]',  data.fatcaCode);
+      setText(form, 'f1_7[0]',  data.address);
+      setText(form, 'f1_8[0]',  data.cityStateZip);
+      setText(form, 'f1_9[0]',  data.requester);
+      setText(form, 'f1_10[0]', data.accounts);
+
+      if (data.ssn.length === 9) {
+        setText(form, 'f1_11[0]', data.ssn.slice(0,3));
+        setText(form, 'f1_12[0]', data.ssn.slice(3,5));
+        setText(form, 'f1_13[0]', data.ssn.slice(5,9));
+      }
+      if (data.ein.length === 9) {
+        setText(form, 'f1_14[0]', data.ein.slice(0,2));
+        setText(form, 'f1_15[0]', data.ein.slice(2,9));
+      }
+
+      const clsToCheckbox = {
+        individual: 'c1_1[0]', ccorp: 'c1_2[0]', scorp: 'c1_3[0]',
+        partnership: 'c1_4[0]', trust: 'c1_5[0]', llc: 'c1_6[0]', other: 'c1_7[0]',
+      };
+      const cb = clsToCheckbox[data.classification];
+      if (cb) {
+        if (!setCheck(form, cb)) log('  checkbox de classificação não encontrado:', cb);
+      }
+
+      if ($('enableAnchors').checked) {
+        const helv = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+        const page = pdf.getPage(0);
+        const visible = $('anchorVisible').checked;
+        const color = visible ? PDFLib.rgb(0.55, 0.55, 0.55) : PDFLib.rgb(1, 1, 1);
+        const sigText = $('sigAnchor').value || '/s1/';
+        const dateText = $('dateAnchor').value || '/d1/';
+        const sigX = parseFloat($('sigX').value)  || 200;
+        const sigY = parseFloat($('sigY').value)  || 108;
+        const dateX = parseFloat($('dateX').value) || 475;
+        const dateY = parseFloat($('dateY').value) || 108;
+        page.drawText(sigText,  { x: sigX,  y: sigY,  size: 8, font: helv, color });
+        page.drawText(dateText, { x: dateX, y: dateY, size: 8, font: helv, color });
+        log('Âncoras inseridas:', sigText, 'em (' + sigX + ',' + sigY + ');', dateText, 'em (' + dateX + ',' + dateY + ')');
+      }
+
+      if ($('flatten').checked) {
+        try { form.flatten(); log('Formulário "achatado" — campos não editáveis.'); }
+        catch (e) { log('  flatten falhou:', e.message); }
+      }
+
+      const out = await pdf.save();
+      const blob = new Blob([out], { type: 'application/pdf' });
+      const a = document.createElement('a');
+      const tag = ($('flatten').checked ? 'flat' : 'edit') + ($('enableAnchors').checked ? '-anchors' : '');
+      const filename = 'w9-' + tag + '-' + new Date().toISOString().slice(0,10) + '.pdf';
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      log('PDF gerado:', filename);
+    } catch (err) {
+      log('ERRO:', err.message);
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+    }
+  };
+})();
+</script>
+</body>
+</html>
